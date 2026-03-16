@@ -2,6 +2,7 @@ import os
 import glob
 import scipy.io as sio
 import matplotlib.pyplot as plt
+from config import Config
 
 # =======================================================================
 # 原始数据可视化诊断工具 (Raw Data Diagnostic Plotter)
@@ -20,7 +21,7 @@ def plot_raw_datasets():
     # 这里直接硬编码了数据目录。
     # 【拓展预留】：如果你的项目越来越大，建议改成从 config 导入：
     # from config import Config; data_dir = Config.DATA_DIR
-    data_dir = './data/'
+    data_dir = Config.DATA_DIR
     
     # glob 类似于 C++ 中的目录遍历 (如 std::filesystem) 配合正则表达式，
     # 但 Python 中只需一行代码就能抓出所有特定后缀的文件。

@@ -77,8 +77,8 @@ def generate_luts(output_dir):
     print(f"  -> LUT_BSpline.mem 和 LUT_Sigmoid.mem 已生成。")
 
 
-def extract_hardware_weights(pth_path='kan_battery_weights.pth'):
-    output_dir = './hw_export'
+def extract_hardware_weights(pth_path=Config.WEIGHT_PATH):
+    output_dir = Config.HW_EXPORT_DIR
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         

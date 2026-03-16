@@ -215,7 +215,10 @@ def evaluate(model, test_loaders, scaler_x, scaler_y):
                      bbox=dict(boxstyle='round', facecolor='#f8f9fa', edgecolor='#ced4da', pad=1.5))
         
         plt.tight_layout()
-        save_name = f'eval_phys_quantized_{file_name.replace(".mat", "")}.png'
+        if not os.path.exists(Config.PLOTS_DIR):
+            os.makedirs(Config.PLOTS_DIR)
+            
+        save_name = os.path.join(Config.PLOTS_DIR, f'eval_{file_name.replace(".mat", "")}.png')
         plt.savefig(save_name, dpi=300)
         plt.close()
 
@@ -230,7 +233,7 @@ if __name__ == "__main__":
     # 纯测试模式：绝不触发训练流程，只获取数据加载器
     _, test_loaders, scaler_x, scaler_y = load_and_preprocess_data()
     
-    weight_path = 'kan_battery_weights.pth'
+    weight_path = Config.WEIGHT_PATH
     if not os.path.exists(weight_path):
         print(f"[!] 错误：未找到权重文件 {weight_path}，请先运行 train.py 进行模型训练与导出。")
         exit()

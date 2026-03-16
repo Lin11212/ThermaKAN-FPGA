@@ -152,8 +152,8 @@ def train_model():
     # torch.save 将其序列化为二进制 .pth 文件，这是后续提权、部署的基石。
     # 【拓展预留】：如果想保存带有优化器状态的 checkpoint 用于断点续训，
     # 可以保存为 dict: torch.save({'model': model.state_dict(), 'opt': opt_base.state_dict()}, 'ckpt.pth')
-    torch.save(model.state_dict(), 'kan_battery_weights.pth')
-    print("\n[+] 训练完成！模型绝对物理约束权重已写入: kan_battery_weights.pth")
+    torch.save(model.state_dict(), Config.WEIGHT_PATH)
+    print(f"[+] 训练完成！模型绝对物理约束权重已写入: {Config.WEIGHT_PATH}")
 
 if __name__ == "__main__":
     train_model()

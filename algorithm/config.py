@@ -1,5 +1,5 @@
 import torch
-
+import os
 class Config:
     """
     =======================================================================
@@ -11,7 +11,7 @@ class Config:
     2. 将所有的超参数集中在这里，是为了方便未来做硬件参数扫描或一键调节，
        避免在多个 .py 文件中来回修改导致混乱（避免硬编码）。
     """
-
+    
     # ---------------------------------------------------------------------
     # 1. 硬件与环境设置
     # ---------------------------------------------------------------------
@@ -23,7 +23,11 @@ class Config:
     # 数据集存放路径
     # 【拓展预留】：如果以后你需要进行多个数据集的交叉对比，可以将这里改为字典或列表
     # 例如：DATA_DIRS = {'test_A': './data_A/', 'test_B': './data_B/'}
-    DATA_DIR = './data/'
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATA_DIR = os.path.join(BASE_DIR, 'data')
+    WEIGHT_PATH = os.path.join(BASE_DIR, 'kan_battery_weights.pth')
+    HW_EXPORT_DIR = os.path.join(BASE_DIR, 'hw_export')
+    PLOTS_DIR = os.path.join(BASE_DIR, 'plots')
     
     # ---------------------------------------------------------------------
     # 2. 数据维度与网络拓扑 (重点扩展区)
