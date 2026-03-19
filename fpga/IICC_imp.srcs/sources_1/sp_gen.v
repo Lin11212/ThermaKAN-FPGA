@@ -9,7 +9,7 @@ module sp_gen#(
     input                               en,
     input       [DATAWIDTH-1:0]         data,
 
-    output      reg[3:0]                grid_index_d0,
+    output      reg[2:0]                grid_index_d0,
     //x+h
     output      [DATAWIDTH-1:0]         o_data_k1,
     //2h-x
@@ -23,7 +23,7 @@ module sp_gen#(
     //输出信号
     output      reg                     o_valid
 );
-    wire [3:0] grid_index;
+    wire [2:0] grid_index;
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n)begin
             grid_index_d0 <= 4'd0;

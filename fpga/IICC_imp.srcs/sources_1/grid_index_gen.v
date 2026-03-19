@@ -6,7 +6,7 @@ module grid_index_gen#(
 )(
     input       [DATAWIDTH-1:0]         data,
     //网格索引
-    output      [3:0]   grid_index
+    output      [2:0]   grid_index
 );
     assign              grid_index = (GRID/2) + ($signed(data) >>> (15-HBITS));
 endmodule
