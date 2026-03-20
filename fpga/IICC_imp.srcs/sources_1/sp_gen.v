@@ -1,59 +1,46 @@
 //生成B样条取值和索引的总模块
 module sp_gen#(
-    parameter                           DATAWIDTH = 16,
+    parameter                           DATA_WIDTH = 16,
     parameter                           HBITS     = 2,
     parameter                           GRID      = 8
 )(
     input                               clk,
     input                               rst_n,
     input                               en,
-    input       [DATAWIDTH-1:0]         data,
+    input       [DATA_WIDTH-1:0]         data_in,
 
-    output      reg[2:0]                grid_index_d0,
+    output      [2:0]                    grid_index,
     //x+h
-    output      [DATAWIDTH-1:0]         o_data_k1,
+    output      [DATA_WIDTH-1:0]         o_data_k1,
     //2h-x
-    output      [DATAWIDTH-1:0]         o_data_k2,
+    output      [DATA_WIDTH-1:0]         o_data_k2,
     //x
-    output      [DATAWIDTH-1:0]         o_data_k0,
+    output      [DATA_WIDTH-1:0]         o_data_k0,
     //h-x
-    output      [DATAWIDTH-1:0]         o_data_k3,
+    output      [DATA_WIDTH-1:0]         o_data_k3,
     //silu
-    output      [DATAWIDTH-1:0]         silu,
-    //输出信号
-    output      reg                     o_valid
+    output      [DATA_WIDTH-1:0]         silu
 );
-    wire [2:0] grid_index;
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n)begin
-            grid_index_d0 <= 4'd0;
-            o_valid <= 1'd0;
-        end
-        else begin
-            grid_index_d0 <= grid_index;
-            o_valid <= en;
-        end
-    end
     //addr_gen
     //x和x+h
-    wire [DATAWIDTH-2-HBITS:0] addr_1;
+    wire [DATA_WIDTH-2-HBITS:0] addr_1;
     //h-x和2h-x
-    wire [DATAWIDTH-2-HBITS:0] addr_2;
+    wire [DATA_WIDTH-2-HBITS:0] addr_2;
     addr_gen #(
-        .DATAWIDTH 	(DATAWIDTH),
+        .DATA_WIDTH 	(DATA_WIDTH),
         .HBITS     	(HBITS))
     u_addr_gen(
-        .data   	(data    ),
+        .data   	(data_in ),
         .addr_1 	(addr_1  ),
         .addr_2 	(addr_2  )
     );
     //grid_index_gen
     grid_index_gen #(
-        .DATAWIDTH 	(DATAWIDTH),
+        .DATA_WIDTH 	(DATA_WIDTH),
         .HBITS     	(HBITS),
         .GRID      	(GRID))
     u_grid_index_gen(
-        .data       	(data        ),
+        .data       	(data_in   ),
         .grid_index 	(grid_index)
     );
     //x+h和2h-x的rom
@@ -81,7 +68,7 @@ module sp_gen#(
     silu_rom silu_rom (
         .clka(clk),    // input wire clka
         .ena(en),      // input wire ena
-        .addra(data),  // input wire [15 : 0] addra
+        .addra(data_in),  // input wire [15 : 0] addra
         .douta(silu)  // output wire [15 : 0] douta
     );
 endmodule

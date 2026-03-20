@@ -1,10 +1,10 @@
 //输入16位数字，输出对应网格索引
 module grid_index_gen#(
-    parameter                           DATAWIDTH = 16,
+    parameter                           DATA_WIDTH = 16,
     parameter                           HBITS     = 2,
     parameter                           GRID      = 8
 )(
-    input       [DATAWIDTH-1:0]         data,
+    input       [DATA_WIDTH-1:0]         data,
     //网格索引
     output      [2:0]   grid_index
 );
