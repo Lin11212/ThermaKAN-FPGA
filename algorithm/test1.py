@@ -1,137 +1,101 @@
+import torch
+import numpy as np
 import os
-import re
+from kan_model import BatteryKAN
+from config import Config
 
-# ==========================================
-# 1. 文件解析模块 (兼容 Vivado .coe 和纯 hex .txt)
-# ==========================================
-def load_hex_file(filepath, depth):
-    mem = [0] * depth
-    if not os.path.exists(filepath):
-        print(f"[警告] 未找到文件: {filepath}，该数组将使用全 0 参与计算。")
-        return mem
-        
-    with open(filepath, 'r') as f:
-        content = f.read()
+# --- 硬件底层模拟算子 (22位累加 / 16位钳位) ---
+def to_signed(val, bits):
+    val = val & ((1 << bits) - 1)
+    return val - (1 << bits) if val >= (1 << (bits - 1)) else val
 
-    # 清理 COE 文件的 header
-    if 'memory_initialization_vector' in content:
-        content = content.split('memory_initialization_vector')[1]
-        content = content.replace('=', '').replace(';', '')
+def float_to_q1_15_int(val):
+    scale = 32768.0
+    val_int = int(np.clip(np.round(val * scale), -32768, 32767))
+    return val_int & 0xFFFF
 
-    # 提取所有合法的 16 进制字符串
-    hex_vals = re.findall(r'[0-9a-fA-F]+', content)
-    
-    for i, val in enumerate(hex_vals):
-        if i < depth:
-            mem[i] = int(val, 16)
-    return mem
+def float_to_q1_15_hex(val):
+    return f"0x{float_to_q1_15_int(val):04X}"
 
-# ==========================================
-# 2. 定点数与硬件位运算复刻模块
-# ==========================================
-def to_signed_16(val):
-    val = val & 0xFFFF
-    return val - 0x10000 if val >= 0x8000 else val
+def verilog_q15_mult(a_hex, b_hex):
+    a = to_signed(int(a_hex, 16), 16)
+    b = to_signed(int(b_hex, 16), 16)
+    res = (a * b) >> 15
+    return f"0x{res & 0xFFFF:04X}"
 
-def to_hex_16(val):
+def verilog_acc_add(hex_list, acc_bits=22):
+    full_sum = 0
+    for h in hex_list:
+        val = int(h, 16)
+        bits = 16 if len(h) <= 6 else acc_bits
+        full_sum += to_signed(val, bits)
+    return f"0x{full_sum & ((1 << acc_bits) - 1):06X}"
+
+def verilog_clamp_to_q15(acc_hex, acc_bits=22):
+    val = to_signed(int(acc_hex, 16), acc_bits)
+    if val > 32767: return "0x7FFF"
+    if val < -32768: return "0x8000"
     return f"0x{val & 0xFFFF:04X}"
 
-def verilog_q15_mult(a_val, b_val):
-    a = to_signed_16(a_val)
-    b = to_signed_16(b_val)
-    m = a * b
-    m_32 = m & 0xFFFFFFFF
-    # 完美复刻: mult_out = m[30:15]
-    res = (m_32 >> 15) & 0xFFFF
-    return res
+def simulate_sp_gen(x_float):
+    silu_val = x_float / (1.0 + np.exp(-x_float))
+    silu_h = float_to_q1_15_hex(silu_val)
+    x_q15 = to_signed(float_to_q1_15_int(x_float), 16)
+    offset = x_q15 >> 13
+    g_idx = 4 + offset 
+    u = (x_q15 & 0x1FFF) / 8192.0
+    def b_a(u_v): return (1.0/6.0) * ((2.0-(u_v+1.0))**3)
+    def b_b(u_v): return (1.0/6.0) * ((2.0-u_v)**3 - 4.0*(1.0-u_v)**3)
+    k0_h, k1_h, k2_h, k3_h = float_to_q1_15_hex(b_a(u)), float_to_q1_15_hex(b_b(u)), \
+                             float_to_q1_15_hex(b_b(1.0-u)), float_to_q1_15_hex(b_a(1.0-u))
+    return silu_h, k0_h, k1_h, k2_h, k3_h, g_idx
 
-# ==========================================
-# 3. 核心测试逻辑
-# ==========================================
-def run_kan_hardware_simulation(data_in_hex, layer, node_in, node_out, history_hex, file_dir="./"):
-    print(f"=== KAN 硬件流水线比特级推演 ===")
-    print(f"输入配置: data_in={data_in_hex}, layer={layer}, node_in={node_in}, node_out={node_out}, history={history_hex}\n")
-
-    # 参数定义
-    DATA_WIDTH = 16
-    NODE_1 = 64
-    NODE_0 = 9
-    HBITS = 2
+def run_hw_simulation(model, input_vec):
+    l0_res = []
+    for j in range(64):
+        acc = "0x000000"
+        for i in range(9):
+            sh, k0, k1, k2, k3, gi = simulate_sp_gen(input_vec[i])
+            bw = model.layers[0].base_weight[j, i].item()
+            sw = model.layers[0].spline_weight[j, i].detach().numpy()
+            m = [verilog_q15_mult(k0, float_to_q1_15_hex(sw[gi])),
+                 verilog_q15_mult(k1, float_to_q1_15_hex(sw[gi+1])),
+                 verilog_q15_mult(k2, float_to_q1_15_hex(sw[gi+2])),
+                 verilog_q15_mult(k3, float_to_q1_15_hex(sw[gi+3])),
+                 verilog_q15_mult(sh, float_to_q1_15_hex(bw))]
+            acc = verilog_acc_add(m + [acc])
+        l0_res.append(verilog_clamp_to_q15(acc))
     
-    data_in = int(data_in_hex, 16)
-    history = int(history_hex, 16)
+    acc_f = "0x000000"
+    for i in range(64):
+        xf = to_signed(int(l0_res[i], 16), 16) / 32768.0
+        sh, k0, k1, k2, k3, gi = simulate_sp_gen(xf)
+        bw = model.layers[1].base_weight[0, i].item()
+        sw = model.layers[1].spline_weight[0, i].detach().numpy()
+        m = [verilog_q15_mult(k0, float_to_q1_15_hex(sw[gi])),
+             verilog_q15_mult(k1, float_to_q1_15_hex(sw[gi+1])),
+             verilog_q15_mult(k2, float_to_q1_15_hex(sw[gi+2])),
+             verilog_q15_mult(k3, float_to_q1_15_hex(sw[gi+3])),
+             verilog_q15_mult(sh, float_to_q1_15_hex(bw))]
+        acc_f = verilog_acc_add(m + [acc_f])
+    return to_signed(int(verilog_clamp_to_q15(acc_f), 16), 16) / 32768.0
 
-    # 1. 地址生成 (复刻 addr_gen.v)
-    data_abs = (-data_in) & 0xFFFF
-    sign = (data_in >> 15) & 1
-    addr_1 = (data_abs & 0x1FFF) if sign else (data_in & 0x1FFF)
-    addr_2 = (data_in & 0x1FFF) if sign else (data_abs & 0x1FFF)
-    
-    # 2. 网格索引生成 (复刻 grid_index_gen.v)
-    # $signed(data) >>> 13
-    signed_data = to_signed_16(data_in)
-    grid_index = 4 + (signed_data >> 13)
-    grid_index = grid_index & 0x7 # 保持3位宽
+# --- 执行评估 ---
+model = BatteryKAN(); model.load_state_dict(torch.load(Config.WEIGHT_PATH, map_location='cpu')); model.eval()
+np.random.seed(42); samples = 100
+test_inputs = np.random.uniform(-1, 1, (samples, 9))
+phys_scale = (32.0 - 24.0) / 2.0; phys_min = 24.0
+errs = []
 
-    print(f"[sp_gen] 计算出 addr_1={hex(addr_1)}, addr_2={hex(addr_2)}, grid_index={grid_index}")
+print(f">>> 正在分析 {samples} 组工况数据的硬件量化误差...")
+for i in range(samples):
+    hw_n = run_hw_simulation(model, test_inputs[i])
+    with torch.no_grad():
+        th_n = model(torch.tensor([test_inputs[i]], dtype=torch.float32))[0, 0].item()
+    hw_t, th_t = (hw_n + 1) * phys_scale + phys_min, (th_n + 1) * phys_scale + phys_min
+    errs.append(abs(hw_t - th_t))
 
-    # 3. 加载特征 ROM (假设深度为 8192)
-    sp_rom_a = load_hex_file(os.path.join(file_dir, "sp_rom_a.coe"), 8192)
-    sp_rom_b = load_hex_file(os.path.join(file_dir, "sp_rom_b.coe"), 8192)
-    silu_rom = load_hex_file(os.path.join(file_dir, "silu_rom.coe"), 65536)
-
-    o_data_k1 = sp_rom_a[addr_1]
-    o_data_k2 = sp_rom_a[addr_2]
-    o_data_k0 = sp_rom_b[addr_1]
-    o_data_k3 = sp_rom_b[addr_2]
-    silu_val  = silu_rom[data_in]
-
-    print(f"[sp_gen] 提取特征: k0={to_hex_16(o_data_k0)}, k1={to_hex_16(o_data_k1)}, k2={to_hex_16(o_data_k2)}, k3={to_hex_16(o_data_k3)}, silu={to_hex_16(silu_val)}")
-
-    # 4. 加载权重 ROM
-    sp_addr = (node_in * NODE_1 + node_out) if layer == 0 else ((NODE_0 * NODE_1) + node_in)
-    print(f"[get_weight] 寻址 sp_addr={sp_addr}")
-
-    w_b = []
-    for i in range(11):
-        w_b.append(load_hex_file(os.path.join(file_dir, f"w_b{i}.coe"), 1024))
-    w_silu_rom = load_hex_file(os.path.join(file_dir, "w_silu.coe"), 1024)
-
-    w_k0 = w_b[grid_index][sp_addr]
-    w_k1 = w_b[grid_index+1][sp_addr]
-    w_k2 = w_b[grid_index+2][sp_addr]
-    w_k3 = w_b[grid_index+3][sp_addr]
-    w_silu = w_silu_rom[sp_addr]
-
-    print(f"[get_weight] 提取权重: w_k0={to_hex_16(w_k0)}, w_k1={to_hex_16(w_k1)}, w_k2={to_hex_16(w_k2)}, w_k3={to_hex_16(w_k3)}, w_silu={to_hex_16(w_silu)}")
-
-    # 5. DSP 乘法截断流水线
-    mult_out_k0 = verilog_q15_mult(o_data_k0, w_k0)
-    mult_out_k1 = verilog_q15_mult(o_data_k1, w_k1)
-    mult_out_k2 = verilog_q15_mult(o_data_k2, w_k2)
-    mult_out_k3 = verilog_q15_mult(o_data_k3, w_k3)
-    mult_out_silu = verilog_q15_mult(silu_val, w_silu)
-
-    print(f"[dsp] 乘积输出: mult_k0={to_hex_16(mult_out_k0)}, mult_k1={to_hex_16(mult_out_k1)}, mult_k2={to_hex_16(mult_out_k2)}, mult_k3={to_hex_16(mult_out_k3)}, mult_silu={to_hex_16(mult_out_silu)}")
-
-    # 6. Adder 累加流水线
-    full_sum = (to_signed_16(mult_out_k0) + 
-                to_signed_16(mult_out_k1) + 
-                to_signed_16(mult_out_k2) + 
-                to_signed_16(mult_out_k3) + 
-                to_signed_16(mult_out_silu) + 
-                to_signed_16(history))
-    
-    add_out = full_sum & 0xFFFF
-    print(f"\n[adder] 最终写入 RAM 预期结果 (add_out) = {to_hex_16(add_out)}")
-
-# 运行测试
-if __name__ == "__main__":
-    # 将此路径修改为你之前生成权重和 ROM .coe/.txt 文件的实际目录
-    WEIGHTS_DIRECTORY = "./" 
-    
-    # 模拟输入参数: 
-    # data_in = 0x1234 (Q1.15格式，约等于 0.142)
-    # layer = 0, node_in = 0, node_out = 0
-    # 由于是累加第一个边，history 为 0x0000
-    run_kan_hardware_simulation("0x1234", 0, 0, 0, "0x0000", WEIGHTS_DIRECTORY)
+print("\n" + "="*50)
+print(f"平均绝对误差 (MAE): {np.mean(errs):.6f} °C")
+print(f"最大绝对误差 (Max): {np.max(errs):.6f} °C")
+print("="*50)

@@ -96,8 +96,8 @@ module get_weight#(
         .addra(sp_addr),  // input wire [9 : 0] addra
         .douta(w_b[10])  // output wire [15 : 0] douta
     );
-    assign w_k0 = w_b[grid_index];
-    assign w_k1 = w_b[grid_index+1];
-    assign w_k2 = w_b[grid_index+2];
-    assign w_k3 = w_b[grid_index+3];
+    assign w_k0 = w_b[{1'b0, grid_index}];
+    assign w_k1 = w_b[{1'b0, grid_index}+1];
+    assign w_k2 = w_b[{1'b0, grid_index}+2];
+    assign w_k3 = w_b[{1'b0, grid_index}+3];
 endmodule

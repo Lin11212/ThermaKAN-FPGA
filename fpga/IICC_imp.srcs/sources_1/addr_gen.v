@@ -10,7 +10,7 @@ module addr_gen#(
     //h-x和2h-x
     output      [DATA_WIDTH-2-HBITS:0]   addr_2
 );
-    wire        [DATA_WIDTH-1:0]         data_abs   =  ~data[DATA_WIDTH-1:0]+1'b1;
-    assign                              addr_1  =  (data[DATA_WIDTH-1])?data_abs[DATA_WIDTH-2-HBITS:0]:data[DATA_WIDTH-2-HBITS:0];
-    assign                              addr_2  =  (data[DATA_WIDTH-1])?data[DATA_WIDTH-2-HBITS:0]:data_abs[DATA_WIDTH-2-HBITS:0];
+    assign addr_1 = data[DATA_WIDTH-2-HBITS:0];
+    wire [DATA_WIDTH-1:0] neg_data = -data; 
+    assign addr_2 = neg_data[DATA_WIDTH-2-HBITS:0];
 endmodule

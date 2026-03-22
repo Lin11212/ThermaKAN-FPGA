@@ -46,24 +46,24 @@ module top_tb();
 
         // 触发开始信号
         start   = 1'b1;
-        data_in = 16'h0000;
+        data_in = 16'h0CCD;
         #10;
         start   = 1'b0;
-        data_in = 16'h1000;
+        data_in = 16'hE666;
         #10;
-        data_in = 16'h2000;
+        data_in = 16'h2666;
         #10;
-        data_in = 16'h3000;
+        data_in = 16'hCCCD;
         #10;
         data_in = 16'h4000;
         #10;
-        data_in = 16'hF000;
+        data_in = 16'hB333;
         #10;
-        data_in = 16'hE000;
+        data_in = 16'h599A;
         #10;
-        data_in = 16'hD000;
+        data_in = 16'h999A;
         #10;
-        data_in = 16'hC000;
+        data_in = 16'h7333;
         #10;
         
         // 数据送完后总线归零
