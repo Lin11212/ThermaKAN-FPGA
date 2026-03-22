@@ -1,25 +1,28 @@
 module get_weight#(
-    parameter       DATAWIDTH = 16,
-    parameter       NODEWIDTH = 6
+    parameter       DATA_WIDTH = 16,
+    parameter       NODE_WIDTH = 6,
+    parameter       LAYER_WIDTH = 1,
+    parameter       NODE_0      = 9,
+    parameter       NODE_1      = 64
 )(
     input           clk,
     input           rst_n,
     input           en,
     input   [2:0]   grid_index,
-    input           layer,
-    input   [NODEWIDTH-1:0]   i_node,
-    input   [NODEWIDTH-1:0]   o_node,
+    input   [LAYER_WIDTH-1:0]  layer,
+    input   [NODE_WIDTH-1:0]   node_in,
+    input   [NODE_WIDTH-1:0]   node_out,
 
-    output  [DATAWIDTH-1:0]  w_silu,
-    output  [DATAWIDTH-1:0]  w_k0,
-    output  [DATAWIDTH-1:0]  w_k1,
-    output  [DATAWIDTH-1:0]  w_k2,
-    output  [DATAWIDTH-1:0]  w_k3
+    output  [DATA_WIDTH-1:0]  w_silu,
+    output  [DATA_WIDTH-1:0]  w_k0,
+    output  [DATA_WIDTH-1:0]  w_k1,
+    output  [DATA_WIDTH-1:0]  w_k2,
+    output  [DATA_WIDTH-1:0]  w_k3
 );
     wire [9:0] sp_addr;
-    assign sp_addr = (layer == 1'b0)?({i_node[3:0], o_node[5:0]}):(10'd576 + i_node);
+    assign sp_addr = (layer == 1'b0)?(node_in * NODE_1 + node_out):((NODE_0 * NODE_1) + node_in);
 
-    wire [DATAWIDTH-1:0] w_b [0:10];
+    wire [DATA_WIDTH-1:0] w_b [0:10];
 
     w_silu u_w_silu (
     .clka(clk),    // input wire clka

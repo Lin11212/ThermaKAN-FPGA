@@ -63,6 +63,8 @@ module fsm#(
     localparam                  FINISH  =   3'd5;
     //提取输出数据
     localparam                  OUT     =   3'd6;
+    //换阶段排空
+    localparam                  FLUSH   =   3'd7;
     //状态判断逻辑
     always @(*) begin
         case (state)
@@ -70,9 +72,10 @@ module fsm#(
             LOAD    :  next_state  =   (load_done)?READ1:LOAD;
             READ1   :  next_state  =   READ2;
             READ2   :  next_state  =   (node_out == max_node_out[layer])?((node_in == max_node_in[layer] && layer == LAYER - 1'b1)?FINISH:READ1):CUL;
-            CUL     :  next_state  =   (node_out == max_node_out[layer])?READ1:CUL;
             FINISH  :  next_state  =   (finish_done)?OUT:FINISH;
             OUT     :  next_state  =   (out_done)?IDLE:OUT;
+            CUL     :  next_state  =   (node_out == max_node_out[layer])?((node_in == max_node_in[layer] && layer == 1'b0)?FLUSH:READ1):CUL;
+            FLUSH   :  next_state  =   READ1;
             default :  next_state  =   IDLE; 
         endcase
     end
