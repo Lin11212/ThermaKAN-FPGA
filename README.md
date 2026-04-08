@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/7ba109dfa9ec8a13a152bdcab103918fa1ecc0da.jpg" alt="Project Mascot" width="800">
+
 
 # ThermaKAN-FPGA
 
